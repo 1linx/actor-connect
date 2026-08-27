@@ -93,7 +93,122 @@
 				]
 			}
 		],
+		"strikeLimit": 3,
 		"createdAt": "2026-08-20T17:36:36.511Z",
+		"source": "manual"
+	},
+	{
+		"id": "aliens-to",
+		"name": "Aliens to",
+		"start": {
+			"id": 679,
+			"mediaType": "movie",
+			"title": "Aliens",
+			"year": "1986",
+			"posterPath": "/r1x5JGpyqZU8PYhbs4UcrO1Xb6x.jpg"
+		},
+		"end": {
+			"id": 44214,
+			"mediaType": "movie",
+			"title": "Black Swan",
+			"year": "2010",
+			"posterPath": "/viWheBd44bouiLCHgNMvahLThqx.jpg"
+		},
+		"chain": [
+			{
+				"id": 280,
+				"mediaType": "movie",
+				"title": "Terminator 2: Judgment Day",
+				"year": "1991",
+				"posterPath": "/jFTVD4XoWQTcg7wdyJKa8PEds5q.jpg"
+			},
+			{
+				"id": 9619,
+				"mediaType": "movie",
+				"title": "Dante's Peak",
+				"year": "1997",
+				"posterPath": "/8PRVIfZzDgw8EV3sDWJ6NA1ZMAn.jpg"
+			},
+			{
+				"id": 710,
+				"mediaType": "movie",
+				"title": "GoldenEye",
+				"year": "1995",
+				"posterPath": "/z0ljRnNxIO7CRBhLEO0DvLgAFPR.jpg"
+			},
+			{
+				"id": 8195,
+				"mediaType": "movie",
+				"title": "Ronin",
+				"year": "1998",
+				"posterPath": "/AirrhRJjHwytOV0pdLu7YZ4DEyr.jpg"
+			},
+			{
+				"id": 101,
+				"mediaType": "movie",
+				"title": "Léon: The Professional",
+				"year": "1994",
+				"posterPath": "/bxB2q91nKYp8JNzqE7t7TWBVupB.jpg"
+			}
+		],
+		"links": [
+			{
+				"personId": 3981,
+				"name": "Jenette Goldstein",
+				"profilePath": "/4YZVLLWEFtxPLaOAlndfzxH1WG1.jpg",
+				"roles": [
+					"Private Vasquez",
+					"Janelle Voight"
+				]
+			},
+			{
+				"personId": 2713,
+				"name": "Linda Hamilton",
+				"profilePath": "/7FNn9Z5xkRS9EFbGL2tpmpph9xV.jpg",
+				"roles": [
+					"Sarah Connor",
+					"Rachel Wando"
+				]
+			},
+			{
+				"personId": 517,
+				"name": "Pierce Brosnan",
+				"profilePath": "/dzXVwwJLPwiZeXOnf7YxorqVEEM.jpg",
+				"roles": [
+					"Harry Dalton",
+					"James Bond"
+				]
+			},
+			{
+				"personId": 48,
+				"name": "Sean Bean",
+				"profilePath": "/kTjiABk3TJ3yI0Cto5RsvyT6V3o.jpg",
+				"roles": [
+					"Alec Trevelyan",
+					"Spence"
+				]
+			},
+			{
+				"personId": 1003,
+				"name": "Jean Reno",
+				"profilePath": "/mw0EZJYz3kiFq9fNxsML773gotF.jpg",
+				"roles": [
+					"Vincent",
+					"Léon Montana"
+				]
+			},
+			{
+				"personId": 524,
+				"name": "Natalie Portman",
+				"profilePath": "/edPU5HxncLWa1YkgRPNkSd68ONG.jpg",
+				"roles": [
+					"Mathilda Lando",
+					"Nina Sayers / The Swan Queen"
+				]
+			}
+		],
+		"strikeLimit": 3,
+		"createdAt": "2026-08-27T12:41:40.811Z",
 		"source": "manual"
 	}
 ]
