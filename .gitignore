@@ -1,0 +1,40 @@
+node_modules
+
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env — .env.example is the only one committed, and it holds no values.
+# Note there is deliberately no `!.env.test` exception: nothing here uses it,
+# and an un-ignored .env.* is how credentials get committed by accident.
+.env
+.env.*
+!.env.example
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# SQLite database (puzzles + TMDB cache). `/data` is the default DATABASE_PATH;
+# the globs cover it wherever else you point that.
+/data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+npm-debug.log*
+
+/.claude
+CLAUDE.md

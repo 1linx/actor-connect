@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<meta name="text-scale" content="scale" />
+		%sveltekit.head%
+	</head>
+	<!-- The embed class is stamped in server-side by hooks.server.ts, so an
+	     iframed game never flashes its own backdrop over the host's. -->
+	<body data-sveltekit-preload-data="hover" class="%actorconnect.body%">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>

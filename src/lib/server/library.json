@@ -1,0 +1,99 @@
+[
+	{
+		"id": "con-air-to-waterworld",
+		"name": "Con Air to Waterworld",
+		"start": {
+			"id": 1701,
+			"mediaType": "movie",
+			"title": "Con Air",
+			"year": "1997",
+			"posterPath": "/kOKjgrEzGOP92rVQ6srA9jtp60l.jpg"
+		},
+		"end": {
+			"id": 9804,
+			"mediaType": "movie",
+			"title": "Waterworld",
+			"year": "1995",
+			"posterPath": "/X4UyUO5jgzs3c5YafnmYKLKKYw.jpg"
+		},
+		"chain": [
+			{
+				"id": 9802,
+				"mediaType": "movie",
+				"title": "The Rock",
+				"year": "1996",
+				"posterPath": "/eBcoxveWzzXQrCrwWMGAROcqgpP.jpg"
+			},
+			{
+				"id": 1669,
+				"mediaType": "movie",
+				"title": "The Hunt for Red October",
+				"year": "1990",
+				"posterPath": "/yVl7zidse4KiWtGMqHFtZCx4X3N.jpg"
+			},
+			{
+				"id": 329,
+				"mediaType": "movie",
+				"title": "Jurassic Park",
+				"year": "1993",
+				"posterPath": "/63viWuPfYQjRYLSZSZNq7dglJP5.jpg"
+			},
+			{
+				"id": 793,
+				"mediaType": "movie",
+				"title": "Blue Velvet",
+				"year": "1986",
+				"posterPath": "/6v1zYh2FKOYVddY5pCQhd4PO9uX.jpg"
+			}
+		],
+		"links": [
+			{
+				"personId": 2963,
+				"name": "Nicolas Cage",
+				"profilePath": "/y1RtezurZYveYkVNRht7CwEgSYY.jpg",
+				"roles": [
+					"Cameron Poe",
+					"Dr. Stanley Goodspeed"
+				]
+			},
+			{
+				"personId": 738,
+				"name": "Sean Connery",
+				"profilePath": "/hbB676mW62gjsh0f51ICYE11niG.jpg",
+				"roles": [
+					"John Patrick Mason",
+					"Capt. 1st Marko Ramius"
+				]
+			},
+			{
+				"personId": 4783,
+				"name": "Sam Neill",
+				"profilePath": "/iIfuxalf37xUayuGyK0zG7z6WEZ.jpg",
+				"roles": [
+					"Capt. 2nd Vasily Borodin",
+					"Grant"
+				]
+			},
+			{
+				"personId": 4784,
+				"name": "Laura Dern",
+				"profilePath": "/gB9PnGEvxKg33OSlcqptQwTBwPE.jpg",
+				"roles": [
+					"Ellie",
+					"Sandy Williams"
+				]
+			},
+			{
+				"personId": 2778,
+				"name": "Dennis Hopper",
+				"profilePath": "/hfrzsJhkX7Vphe3pVYk8lA9BNfg.jpg",
+				"roles": [
+					"Frank Booth",
+					"Deacon"
+				]
+			}
+		],
+		"createdAt": "2026-08-20T17:36:36.511Z",
+		"source": "manual"
+	}
+]
