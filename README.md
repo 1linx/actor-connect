@@ -426,7 +426,11 @@ node build       # run it
 
 [`DEPLOY.md`](DEPLOY.md) covers the AWS + Caddy + PM2 setup behind
 `movie-connect.r2d20.com`, and [`ecosystem.config.cjs`](ecosystem.config.cjs)
-is the PM2 process definition. Short version: the app listens on
+is the PM2 process definition. Getting puzzles live is
+[§7](DEPLOY.md#7-getting-new-or-edited-puzzles-live): export to `library.json`,
+commit, then on the instance `git pull && npm run build && pm2 reload
+ecosystem.config.cjs --update-env` — the config file, not the process name, or
+the environment isn't re-read. Short version: the app listens on
 `127.0.0.1:9091`, Caddy terminates TLS in front of it, secrets stay in a
 gitignored `.env` that Node reads via `--env-file`, and the SQLite database
 under `data/` is the only thing worth backing up.

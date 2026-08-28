@@ -200,18 +200,60 @@ On the instance:
 ```sh
 cd ~/actor-connect
 git pull
-npm ci                  # only needed when dependencies changed
-npm run build
-pm2 reload actor-connect
+npm ci                                        # only when dependencies changed
+npm run build                                 # required: library.json is bundled
+pm2 reload ecosystem.config.cjs --update-env  # note: the config, not the name
 ```
 
-Every puzzle in `library.json` is written to the production database on boot,
-because `ecosystem.config.cjs` sets `PUZZLE_SEED: 'merge'`. New puzzles appear,
-edited ones are updated in place. Confirm it in the logs:
+**Reload the config file, not the process name.** `pm2 reload actor-connect`
+reuses the environment the process was *first started* with, so a changed
+`ecosystem.config.cjs` — including `PUZZLE_SEED` — never reaches the app, and
+the deploy silently does nothing. Passing the config plus `--update-env` is what
+re-reads it.
+
+Every puzzle in `library.json` is then written to the database on boot, because
+the config sets `PUZZLE_SEED: 'merge'`. New puzzles appear, edited ones update
+in place. Confirm in the logs:
 
 ```sh
-pm2 logs actor-connect --lines 20 | grep seed
-# [actor-connect] seed: merged 3 puzzle(s) from library.json
+pm2 logs actor-connect --lines 40 --nostream | grep seed
+# [actor-connect] seed (mode=merge): wrote 3 puzzle(s) from library.json
+```
+
+One line is always logged, so this tells you which of the two things happened:
+
+| Log line | Meaning |
+| --- | --- |
+| `seed (mode=merge): wrote N puzzle(s)` | Worked. |
+| `seed (mode=empty): left the database alone…` | `PUZZLE_SEED` didn't reach the process — reload the config as above. |
+| nothing at all | The app didn't restart, or you're running a build from before this was added. Check `pm2 status` and rerun `npm run build`. |
+
+### If puzzles still aren't appearing
+
+Work down this list — each step rules out one cause:
+
+```sh
+# 1. Did the seed file actually arrive?
+node -e "console.log(require('./src/lib/server/library.json').map(p=>p.id))"
+
+# 2. Is the build fresh? (library.json is imported, so a pull alone isn't enough)
+ls -l build/server/*.js | head -3        # newer than your git pull?
+
+# 3. Does the running process have the variable?
+pm2 env 0 | grep -E 'PUZZLE_SEED|DATABASE_PATH'
+
+# 4. Is it writing the database you're reading?
+sqlite3 "$(pm2 env 0 | sed -n 's/^DATABASE_PATH: //p')" "select id from puzzles;"
+```
+
+If step 3 shows no `PUZZLE_SEED`, the reload didn't take the new config. When in
+doubt, recreate the process outright — this always applies the config, at the
+cost of a second or two of downtime:
+
+```sh
+pm2 delete actor-connect
+pm2 start ecosystem.config.cjs
+pm2 save
 ```
 
 **Only puzzles travel this way.** `data/` and `.env` are gitignored, so the
@@ -237,7 +279,7 @@ on the instance once:
 ```sh
 # with PUZZLE_EDITOR=1 and Caddy auth, use the Delete button in /build; or:
 sqlite3 ~/actor-connect/data/actor-connect.db "delete from puzzles where id='the-id';"
-pm2 reload actor-connect
+pm2 reload ecosystem.config.cjs --update-env
 ```
 
 ## 8. Backups
@@ -268,3 +310,5 @@ risk — which costs nothing to lose but a few API calls.
 | `/build` returns 404 | Working as intended in production. See step 6. |
 | Builder search says the key isn't set | `.env` reached the process but has no `TMDB_API_KEY=` value. |
 | Puzzles vanished after a deploy | `DATABASE_PATH` moved, or `data/` was wiped. Check `pm2 env 0 \| grep DATABASE`. |
+| New puzzles don't appear, and `grep seed` finds nothing | The app didn't restart, or the build predates the seed logging. `pm2 status`, then `npm run build`. |
+| New puzzles don't appear, log says `mode=empty` | `pm2 reload actor-connect` was used, which keeps the old environment. Use `pm2 reload ecosystem.config.cjs --update-env`. |

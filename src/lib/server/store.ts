@@ -593,23 +593,38 @@ const SEED_PATH = 'src/lib/server/library.json';
  */
 const SEED_MODE = (env.PUZZLE_SEED ?? 'empty').trim().toLowerCase();
 
+/**
+ * Always logs exactly one line, including when it decides to do nothing.
+ *
+ * Silence would be ambiguous in the one case that actually goes wrong: if
+ * PUZZLE_SEED never reaches the process — `pm2 reload <name>` reuses the
+ * environment the process was started with — the mode falls back to `empty`,
+ * the library already has puzzles, and a redeploy quietly changes nothing.
+ * Naming the mode in the log makes that a two-second diagnosis.
+ */
 function applySeed() {
 	// Cast through `unknown`: the JSON's inferred shape can't narrow `roles` to a
 	// two-element tuple, however well formed the file is.
 	const puzzles = seed as unknown as Puzzle[];
-	if (SEED_MODE === 'off' || !puzzles.length) return;
+	const say = (what: string) => console.log(`[actor-connect] seed (mode=${SEED_MODE}): ${what}`);
+
+	if (SEED_MODE === 'off') return say('skipped, seeding is off');
+	if (!puzzles.length) return say('library.json is empty, nothing to add');
 
 	if (SEED_MODE === 'merge') {
 		for (const puzzle of puzzles) savePuzzle(puzzle);
-		// Logged rather than silent: this writes to the library on every boot, so
-		// it should be visible in `pm2 logs` when it happens.
-		console.log(`[actor-connect] seed: merged ${puzzles.length} puzzle(s) from library.json`);
-		return;
+		return say(`wrote ${puzzles.length} puzzle(s) from library.json`);
 	}
 
-	if (one(sql.count.puzzles) > 0) return;
+	const held = one(sql.count.puzzles);
+	if (held > 0) {
+		return say(
+			`left the database alone — it already holds ${held} puzzle(s). ` +
+				`Set PUZZLE_SEED=merge if library.json should be the source of truth.`
+		);
+	}
 	for (const puzzle of puzzles) savePuzzle(puzzle);
-	console.log(`[actor-connect] seed: empty library, added ${puzzles.length} puzzle(s)`);
+	return say(`database was empty, added ${puzzles.length} puzzle(s)`);
 }
 
 applySeed();
