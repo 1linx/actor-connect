@@ -156,6 +156,17 @@ const MIGRATIONS: string[] = [
 
 	/* 3 — decoys dropped: the deck is just the films that make up the chain */ `
 	drop table puzzle_decoys;
+	`,
+
+	/* 4 — walking the cast graph: filmographies, and the star rating */ `
+	-- TMDB's score out of 10. Shown when picking a film; not used for filtering,
+	-- because a 9.0 with twelve votes is still obscure — that's vote_count's job.
+	alter table titles add column vote_average real not null default 0;
+
+	-- Set once we've pulled a person's filmography from /person/{id}/movie_credits.
+	-- Their individual credits go in title_cast, the same table a film's cast
+	-- lands in: it's one relation, discovered from either end.
+	alter table people add column credits_fetched_at integer;
 	`
 ];
 

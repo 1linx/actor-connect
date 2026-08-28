@@ -7,14 +7,14 @@
 			"mediaType": "movie",
 			"title": "Con Air",
 			"year": "1997",
-			"posterPath": "/kOKjgrEzGOP92rVQ6srA9jtp60l.jpg"
+			"posterPath": null
 		},
 		"end": {
 			"id": 9804,
 			"mediaType": "movie",
 			"title": "Waterworld",
 			"year": "1995",
-			"posterPath": "/X4UyUO5jgzs3c5YafnmYKLKKYw.jpg"
+			"posterPath": null
 		},
 		"chain": [
 			{
@@ -22,28 +22,28 @@
 				"mediaType": "movie",
 				"title": "The Rock",
 				"year": "1996",
-				"posterPath": "/eBcoxveWzzXQrCrwWMGAROcqgpP.jpg"
+				"posterPath": null
 			},
 			{
 				"id": 1669,
 				"mediaType": "movie",
 				"title": "The Hunt for Red October",
 				"year": "1990",
-				"posterPath": "/yVl7zidse4KiWtGMqHFtZCx4X3N.jpg"
+				"posterPath": null
 			},
 			{
 				"id": 329,
 				"mediaType": "movie",
 				"title": "Jurassic Park",
 				"year": "1993",
-				"posterPath": "/63viWuPfYQjRYLSZSZNq7dglJP5.jpg"
+				"posterPath": null
 			},
 			{
 				"id": 793,
 				"mediaType": "movie",
 				"title": "Blue Velvet",
 				"year": "1986",
-				"posterPath": "/6v1zYh2FKOYVddY5pCQhd4PO9uX.jpg"
+				"posterPath": null
 			}
 		],
 		"links": [
@@ -99,7 +99,7 @@
 	},
 	{
 		"id": "aliens-to",
-		"name": "Aliens to",
+		"name": "Aliens to Black Swan",
 		"start": {
 			"id": 679,
 			"mediaType": "movie",
@@ -209,6 +209,104 @@
 		],
 		"strikeLimit": 3,
 		"createdAt": "2026-08-27T12:41:40.811Z",
+		"source": "manual"
+	},
+	{
+		"id": "the-big-lebowski-to-the-count-of-monte-cristo",
+		"name": "The Big Lebowski to The Count of Monte Cristo",
+		"start": {
+			"id": 115,
+			"mediaType": "movie",
+			"title": "The Big Lebowski",
+			"year": "1998",
+			"posterPath": "/3bv6WAp6BSxxYvB5ozKFUYuRA8C.jpg"
+		},
+		"end": {
+			"id": 11362,
+			"mediaType": "movie",
+			"title": "The Count of Monte Cristo",
+			"year": "2002",
+			"posterPath": "/ifMgDAUXVQLY4DeOu3VTTi55jSP.jpg"
+		},
+		"chain": [
+			{
+				"id": 341013,
+				"mediaType": "movie",
+				"title": "Atomic Blonde",
+				"year": "2017",
+				"posterPath": "/kV9R5h0Yct1kR8Hf8sJ1nX0Vz4x.jpg"
+			},
+			{
+				"id": 70981,
+				"mediaType": "movie",
+				"title": "Prometheus",
+				"year": "2012",
+				"posterPath": "/qsYQflQhOuhDpQ0W2aOcwqgDAeI.jpg"
+			},
+			{
+				"id": 2118,
+				"mediaType": "movie",
+				"title": "L.A. Confidential",
+				"year": "1997",
+				"posterPath": "/lWCgf5sD5FpMljjpkRhcC8pXcch.jpg"
+			},
+			{
+				"id": 98,
+				"mediaType": "movie",
+				"title": "Gladiator",
+				"year": "2000",
+				"posterPath": "/wN2xWp1eIwCKOD0BHTcErTBv1Uq.jpg"
+			}
+		],
+		"links": [
+			{
+				"personId": 1230,
+				"name": "John Goodman",
+				"profilePath": "/yyYqoyKHO7hE1zpgEV2XlqYWcNV.jpg",
+				"roles": [
+					"Walter Sobchak",
+					"Emmett Kurzfeld"
+				]
+			},
+			{
+				"personId": 6885,
+				"name": "Charlize Theron",
+				"profilePath": "/gd7ShD0yt4bsR2STeQ19KQ6hvXL.jpg",
+				"roles": [
+					"Lorraine Broughton",
+					"Meredith Vickers"
+				]
+			},
+			{
+				"personId": 529,
+				"name": "Guy Pearce",
+				"profilePath": "/vTqk6Nh3WgqPubkS23eOlMAwmwa.jpg",
+				"roles": [
+					"Peter Weyland",
+					"Edmund 'Ed' Exley"
+				]
+			},
+			{
+				"personId": 934,
+				"name": "Russell Crowe",
+				"profilePath": "/uxiXuVH4vNWrKlJMVVPG1sxAJFe.jpg",
+				"roles": [
+					"Wendell 'Bud' White",
+					"Maximus"
+				]
+			},
+			{
+				"personId": 194,
+				"name": "Richard Harris",
+				"profilePath": "/lCvcVMuxrg1f5A8OMqY9AqkkcZR.jpg",
+				"roles": [
+					"Marcus Aurelius",
+					"Abbé Faria"
+				]
+			}
+		],
+		"strikeLimit": 3,
+		"createdAt": "2026-08-27T17:37:23.610Z",
 		"source": "manual"
 	}
 ]

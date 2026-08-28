@@ -131,9 +131,9 @@ curl -sI https://movie-connect.r2d20.com/
 
 ### The puzzle builder
 
-`/build`, `/api/search`, `/api/links` and `/api/puzzles` spend the TMDB key and
-edit the puzzle set, so they return **404 in production** unless you set
-`PUZZLE_EDITOR=1`. Two ways to live with that:
+`/build` (both builders), `/api/search`, `/api/links`, `/api/cast`,
+`/api/filmography` and `/api/puzzles` spend the TMDB key and edit the puzzle
+set, so they return **404 in production** unless you set `PUZZLE_EDITOR=1`. Two ways to live with that:
 
 **Author locally (recommended).** Build puzzles on your laptop, hit **Write to
 library.json** in the builder, commit, deploy. The seed file is the source of
@@ -148,7 +148,7 @@ who finds the URL can run up calls on your key:
 movie-connect.r2d20.com {
 	encode zstd gzip
 
-	@editor path /build* /api/search* /api/links* /api/puzzles*
+	@editor path /build* /api/search* /api/links* /api/cast* /api/filmography* /api/puzzles*
 	basic_auth @editor {
 		alistair <bcrypt-hash-from-caddy-hash-password>
 	}
@@ -173,18 +173,72 @@ sites, add to the site block:
 Use `frame-ancestors`, not `X-Frame-Options` — the latter can't express an
 allowlist, and Caddy adding it back would break the embed.
 
-## 7. Updating
+## 7. Getting new or edited puzzles live
+
+Puzzles are authored **locally** and travel to production **in git**, inside
+`src/lib/server/library.json`.
+
+On your laptop:
+
+```sh
+npm run dev
+# build or edit puzzles at /build, /build/walk, or /build?edit=<id>
+```
+
+Then, in the builder, click **Write to library.json** — this is the step that
+matters, and it's easy to forget. Puzzles live in your local SQLite database
+until you export them, and the database is gitignored.
+
+```sh
+git add src/lib/server/library.json
+git commit -m "Add two puzzles"
+git push
+```
+
+On the instance:
 
 ```sh
 cd ~/actor-connect
 git pull
-npm ci
+npm ci                  # only needed when dependencies changed
 npm run build
 pm2 reload actor-connect
 ```
 
-`data/` and `.env` are gitignored, so puzzles, the TMDB cache and the key all
-survive a deploy untouched.
+Every puzzle in `library.json` is written to the production database on boot,
+because `ecosystem.config.cjs` sets `PUZZLE_SEED: 'merge'`. New puzzles appear,
+edited ones are updated in place. Confirm it in the logs:
+
+```sh
+pm2 logs actor-connect --lines 20 | grep seed
+# [actor-connect] seed: merged 3 puzzle(s) from library.json
+```
+
+**Only puzzles travel this way.** `data/` and `.env` are gitignored, so the
+TMDB cache and the key are untouched by a deploy.
+
+### The one rule
+
+Pick a single source of truth for puzzles. With `merge`, `library.json` is it —
+which means a puzzle **deleted** on the instance comes back on the next reload,
+and an edit made **on the instance** to a puzzle that also exists in the seed
+is overwritten by the seed's version.
+
+If you'd rather author directly on production instead (step 6), set
+`PUZZLE_SEED: 'empty'` and treat the instance's database as canonical — then
+back it up, because it's the only copy.
+
+### Deleting a puzzle for real
+
+Delete it locally, re-export, commit, deploy. Removing it from `library.json`
+stops it being re-added, but `merge` doesn't delete anything, so also remove it
+on the instance once:
+
+```sh
+# with PUZZLE_EDITOR=1 and Caddy auth, use the Delete button in /build; or:
+sqlite3 ~/actor-connect/data/actor-connect.db "delete from puzzles where id='the-id';"
+pm2 reload actor-connect
+```
 
 ## 8. Backups
 

@@ -19,7 +19,8 @@ const BASE = 'https://api.themoviedb.org/3';
 const TTL = {
 	movieCast: 365 * 24 * 60 * 60 * 1000,
 	tvCast: 14 * 24 * 60 * 60 * 1000,
-	search: 30 * 24 * 60 * 60 * 1000
+	search: 30 * 24 * 60 * 60 * 1000,
+	filmography: 30 * 24 * 60 * 60 * 1000
 };
 
 /** At most four requests in flight, 50ms apart. */
@@ -103,6 +104,7 @@ interface TmdbTitle {
 	poster_path?: string | null;
 	popularity?: number;
 	vote_count?: number;
+	vote_average?: number;
 }
 
 interface TmdbMovieCredit {
@@ -141,7 +143,8 @@ function normalise(raw: TmdbTitle, mediaType: MediaType): TitleSummary {
 const withFame = (raw: TmdbTitle, mediaType: MediaType): store.SearchCandidate => ({
 	...normalise(raw, mediaType),
 	popularity: raw.popularity ?? 0,
-	voteCount: raw.vote_count ?? 0
+	voteCount: raw.vote_count ?? 0,
+	voteAverage: raw.vote_average ?? 0
 });
 
 /* -------------------------------------------------------------------------- */
@@ -344,7 +347,11 @@ async function ensureCast(mediaType: MediaType, id: number): Promise<void> {
 						popularity: credit.popularity ?? 0
 					}))
 				),
-				{ popularity: film.popularity, voteCount: film.voteCount }
+				{
+					popularity: film.popularity,
+					voteCount: film.voteCount,
+					voteAverage: film.voteAverage
+				}
 			);
 			return;
 		}
@@ -373,9 +380,111 @@ async function ensureCast(mediaType: MediaType, id: number): Promise<void> {
 					popularity: credit.popularity ?? 0
 				}))
 			),
-			{ popularity: show.popularity, voteCount: show.voteCount }
+			{
+				popularity: show.popularity,
+				voteCount: show.voteCount,
+				voteAverage: show.voteAverage
+			}
 		);
 	});
+}
+
+/**
+ * A person's film credits, as `/person/{id}/movie_credits` returns them. One
+ * call gives their whole filmography, which is what makes walking the cast
+ * graph cheap: a film costs one call, an actor costs one call, and neither is
+ * ever paid twice.
+ */
+interface TmdbPersonCredit extends TmdbTitle {
+	character?: string;
+	order?: number;
+}
+
+const personFlight = new SingleFlight<void>();
+
+async function ensurePersonCredits(personId: number): Promise<void> {
+	const fetched = store.personCreditsFetchedAt(personId);
+	// Filmographies grow, unlike a released film's cast, so this one expires.
+	if (fetched !== null && Date.now() - fetched < TTL.filmography) return;
+
+	return personFlight.run(String(personId), async () => {
+		const raw = await request<{
+			id: number;
+			name?: string;
+			profile_path?: string | null;
+			popularity?: number;
+			cast?: TmdbPersonCredit[];
+		}>(`/person/${personId}/movie_credits`, {});
+
+		// The credits endpoint doesn't return the person's own name, so keep
+		// whatever the cast list that led us here already told us.
+		const known = store.getPerson(personId);
+
+		store.putPersonCredits(
+			{
+				personId,
+				name: known?.name ?? raw.name ?? 'Unknown',
+				profilePath: known?.profilePath ?? raw.profile_path ?? null,
+				popularity: known?.popularity ?? raw.popularity ?? 0
+			},
+			(raw.cast ?? []).map((credit) => {
+				const summary = withFame(credit, 'movie');
+				return {
+					title: {
+						id: summary.id,
+						mediaType: summary.mediaType,
+						title: summary.title,
+						year: summary.year,
+						posterPath: summary.posterPath
+					},
+					fame: {
+						popularity: summary.popularity,
+						voteCount: summary.voteCount,
+						voteAverage: summary.voteAverage
+					},
+					character: (credit.character ?? '').trim(),
+					billing: credit.order ?? null
+				};
+			})
+		);
+	});
+}
+
+/**
+ * The cast of one title, filtered to people worth building a puzzle around.
+ * One API call the first time, none after.
+ */
+export async function castFor(
+	title: { mediaType: MediaType; id: number },
+	options: { minPopularity?: number; limit?: number } = {}
+): Promise<{ title: TitleSummary; cast: store.CastMember[]; cached: boolean }> {
+	const before = store.stats().calls.total;
+	await ensureCast(title.mediaType, title.id);
+
+	return {
+		title: store.getTitle(title.mediaType, title.id) ?? normalise({ id: title.id }, title.mediaType),
+		cast: store.castOf(title.mediaType, title.id, options),
+		cached: store.stats().calls.total === before
+	};
+}
+
+/** One person's films, filtered to ones people have heard of. */
+export async function filmographyFor(
+	personId: number,
+	options: { minVotes?: number; limit?: number } = {}
+): Promise<{
+	person: { personId: number; name: string; profilePath: string | null; popularity: number } | null;
+	films: store.FilmographyEntry[];
+	cached: boolean;
+}> {
+	const before = store.stats().calls.total;
+	await ensurePersonCredits(personId);
+
+	return {
+		person: store.getPerson(personId),
+		films: store.filmographyOf(personId, options),
+		cached: store.stats().calls.total === before
+	};
 }
 
 /** A title's summary, from the cache if we have it. */

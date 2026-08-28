@@ -166,8 +166,8 @@ TMDB cache, and the puzzles, which reference it rather than copying it.
 
 | Table                                 | What's in it                                             |
 | ------------------------------------- | -------------------------------------------------------- |
-| `titles`                              | Every film/show we've seen, with `popularity`/`vote_count`. `cast_fetched_at` is null until we have its full cast |
-| `people`, `title_cast`                | The cast graph: who is in what, with billing, character and popularity |
+| `titles`                              | Every film/show we've seen, with `popularity`, `vote_count` and `vote_average`. `cast_fetched_at` is null until we have its full cast |
+| `people`, `title_cast`                | The cast graph: who is in what, with billing, character and popularity. `people.credits_fetched_at` marks whose full filmography we hold |
 | `searches`                            | Query → the refs it returned                              |
 | `api_calls`                           | Every outbound request, for the audit above               |
 | `puzzles`, `puzzle_chain`, `puzzle_links` | The puzzles, as references into the tables above |
@@ -178,13 +178,21 @@ have run.
 
 Two things worth knowing:
 
-- **`library.json` is the seed, not the store.** It's imported, so it ships in
-  the bundle and a fresh deployment comes up with puzzles already in it. Once
-  the database has puzzles of its own, the seed is ignored. **Write to
-  library.json** in the builder exports the other way, so a puzzle authored
-  locally can be committed with the code.
+- **`library.json` is how puzzles travel.** It's imported, so it ships in the
+  bundle. **Write to library.json** in the builder exports the database back to
+  it, so puzzles you author locally can be committed with the code.
+  `PUZZLE_SEED` decides what a boot does with it: `empty` (default) seeds only a
+  database with no puzzles, `merge` writes every seed puzzle on every boot so
+  the file is canonical — which is what production uses, and what makes a
+  redeploy actually deliver new and edited puzzles. See
+  [`DEPLOY.md`](DEPLOY.md#7-getting-new-or-edited-puzzles-live).
 - **Back up the database file** (or export to the seed) — it's the only copy of
   anything you've authored since.
+
+`title_cast` is filled in from **both ends**: a film's cast fetch inserts sixty
+rows for one film, and an actor's filmography inserts a hundred rows for one
+person. It's one relation either way, so the two builders feed the same table —
+which is why walking the cast graph makes the *next* puzzle cheaper too.
 
 Character names on a link are stored on `puzzle_links` rather than derived from
 `title_cast` at read time. A published puzzle shouldn't reword itself because
@@ -192,7 +200,47 @@ TMDB edited a credit years later.
 
 ## Phase one: authoring puzzles by hand
 
-`/build` is the tool for setting puzzles:
+Two builders, for the two ways you actually think about a chain.
+
+### Walk the cast — `/build/walk`
+
+For when you *don't* know the chain up front. Start with one film, pick an
+actor from its cast, pick one of that actor's other films, and keep going. The
+first and last films become the two anchors; everything between becomes what
+the player places. Each step you take is a connection, already resolved — so
+unlike the other builder, nothing needs checking afterwards.
+
+Both lists have a **how well known** dial, because otherwise a film hands you
+sixty names and an actor hands you a hundred films:
+
+| List | Filters on | Tiers |
+| --- | --- | --- |
+| Cast of a film | TMDB person `popularity` | Everyone / Named cast (1) / Recognisable (2) / Big names (3.5) |
+| An actor's films | `vote_count` | Anything / Fairly known (250) / Well known (1,000) / Household names (4,000) |
+
+The tiers come from measuring rather than guessing. Con Air's cast is 60 names
+with popularity from 0.3 (an extra with one line) to 9.6 (Cage); a floor of 1
+leaves 33 and a floor of 2 leaves 20, which is the difference between a wall of
+extras and a list you can read. Cast lists stay in **billing order** so the
+leads are at the top, with each person's popularity shown as a five-bar meter —
+the numbers are too compressed to read raw.
+
+Films are filtered on the **number** of ratings, not the score: a 9.0 with
+twelve votes is still obscure. The score is shown (★ 7.9) because it's useful
+for picking, just not for filtering.
+
+Films already in the chain are dropped from the list — they'd be right in two
+places. An actor already used as a connection is marked `used` rather than
+hidden: reusing one is legal, and a run of Bond films joined by Brosnan is a
+fine chain, but it makes for a thinner puzzle so it's worth seeing first.
+
+Cost: **one call per new film, one per new actor, never twice.** A film's cast
+comes from `/movie/{id}?append_to_response=credits`, an actor's filmography
+from `/person/{id}/movie_credits` — one call for their whole career.
+
+### Pick the films — `/build`
+
+For when you already have the chain in mind and want it verified:
 
 1. Name the puzzle, pick the start and finish titles.
 2. Add the films in between, in chain order (reorder or drop them as you like).
@@ -203,15 +251,41 @@ TMDB edited a credit years later.
    blocks saving.
 4. **Save to library**, or **Copy JSON** to paste in by hand.
 
+Both builders write the same `Puzzle` rows and share the same save endpoint, so
+you can start a chain in one and finish it in the other by way of the library.
+
+### Editing an existing puzzle
+
+**Edit** in the library list opens `/build?edit=<id>` with the whole puzzle
+loaded: name, both anchors, the chain in order, and — the part that matters —
+each connection's dropdown pre-selected with the actor it was *saved* with,
+rather than reverting to whoever is top-billed now.
+
+- **The id is fixed while editing.** Renaming a puzzle keeps its id, so a link
+  to `/?puzzle=<id>` — or a Laravel page embedding it — doesn't break.
+- **Saving over an id keeps its `createdAt` and `source`**, so an edit doesn't
+  shuffle the library order or relabel an auto-generated puzzle as hand-made.
+- **Structural edits are re-validated.** Removing a middle film re-checks the
+  pair it leaves behind: drop Jurassic Park from the example and the builder
+  refuses to save, saying The Hunt for Red October and Blue Velvet share nobody.
+  You can't quietly write a broken chain.
+- If the actor a connection was saved with is no longer in the shared cast — TMDB
+  credits do get edited — that connection is flagged rather than silently
+  swapped for the top-billed name.
+
+Editing costs **no API calls**: every film involved is already cached, so the
+pair lookups come back from SQLite.
+
 | Environment                   | `/build` |
 | ----------------------------- | -------- |
 | `vite dev`                    | open     |
 | production                    | 404      |
 | production, `PUZZLE_EDITOR=1` | open     |
 
-The gate matters: `/build`, `/api/search`, `/api/links` and `/api/puzzles` all
-spend the TMDB key or edit the puzzle set, so they're closed in production
-unless you deliberately open them — behind your own auth, e.g. a route your
+The gate matters: `/build` (both builders), `/api/search`, `/api/links`,
+`/api/cast`, `/api/filmography` and `/api/puzzles` all spend the TMDB key or
+edit the puzzle set, so they're closed in production unless you deliberately
+open them — behind your own auth, e.g. a route your
 Laravel app proxies.
 
 ## Phase two: generating puzzles automatically — not built
@@ -224,9 +298,13 @@ generator only needs to emit the same `Puzzle` rows the builder does with
 ways (`title_cast_by_person` exists for exactly this). Once it's populated,
 finding chains is a local graph search with **no API calls at all**:
 
-- Seed the graph from a pool of well-known actors, using
-  `/person/{id}/movie_credits` — one call gives every film a person appears in,
-  which is a whole layer at a time. A few hundred calls, once.
+- The graph now grows on its own as a side effect of authoring: the walk
+  builder already calls `/person/{id}/movie_credits`, and three actors' worth
+  of that took the local graph from ~200 titles to 652, with 1,363 cast rows.
+  Author a dozen puzzles and a generator has real ground to search.
+- Seed the rest from a pool of well-known actors the same way — one call gives
+  every film a person appears in, which is a whole layer at a time. A few
+  hundred calls, once.
 - Search locally for a path of the desired length between two films, then check
   each hop is a *recognisable* pairing (low billing order on both sides) rather
   than two people who share a stunt double.
@@ -332,7 +410,8 @@ Nothing depends on being able to drag.
 | `src/lib/server/store.ts`   | Every query: the cache, the cast graph, the puzzles    |
 | `src/lib/server/tmdb.ts`    | The only code that talks to TMDB. Throttled and logged |
 | `src/lib/server/library.ts` | Puzzle rules: marking guesses, hiding answers          |
-| `src/routes/build/`         | The puzzle builder                                     |
+| `src/routes/build/`         | The pick-the-films builder                             |
+| `src/routes/build/walk/`    | The walk-the-cast builder                              |
 
 ## Commands
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { invalidateAll, replaceState } from '$app/navigation';
 	import Poster from '$lib/components/Poster.svelte';
 	import TitleSearch from '$lib/components/TitleSearch.svelte';
 	import { profileUrl } from '$lib/images';
@@ -9,6 +9,7 @@
 		type SharedPerson,
 		type TitleSuggestion
 	} from '$lib/types';
+	import { page } from '$app/state';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -27,19 +28,65 @@
 
 	let saving = $state(false);
 	let saved = $state<string | null>(null);
+	let updated = $state(false);
 	let saveError = $state<string | null>(null);
 	let copied = $state(false);
 	let exported = $state<string | null>(null);
 	/** Pair lookups this session that needed no API call at all. */
 	let fromCache = $state(0);
 
-	const slug = $derived(
-		name
+	/**
+	 * Set when we're editing an existing puzzle. Its id is then fixed: renaming
+	 * an existing puzzle must not re-slug it into a second, near-identical copy.
+	 */
+	let editingId = $state<string | null>(null);
+
+	const slugFrom = (text: string) =>
+		text
 			.trim()
 			.toLowerCase()
 			.replace(/[^a-z0-9]+/g, '-')
-			.replace(/^-|-$/g, '')
-	);
+			.replace(/^-|-$/g, '');
+
+	const slug = $derived(editingId ?? slugFrom(name));
+
+	/**
+	 * Pull an existing puzzle into the form. The stored connection for each
+	 * adjacent pair goes into `chosen`, keyed the same way the pair lookups are,
+	 * so the actor it was saved with stays selected instead of reverting to
+	 * whoever happens to be top-billed.
+	 */
+	function loadForEditing(puzzle: NonNullable<PageData['editing']>) {
+		editingId = puzzle.id;
+		name = puzzle.name ?? '';
+		start = puzzle.start;
+		end = puzzle.end;
+		middle = [...puzzle.chain];
+
+		const nodes = [puzzle.start, ...puzzle.chain, puzzle.end];
+		const picked: Record<string, number> = {};
+		puzzle.links.forEach((link, i) => {
+			const a = nodes[i];
+			const b = nodes[i + 1];
+			if (a && b) picked[pairKey(a, b)] = link.personId;
+		});
+		chosen = picked;
+
+		saved = null;
+		saveError = null;
+	}
+
+	// `?edit=` is a normal navigation, so key the hydration on which puzzle the
+	// loader handed us and do it once per change.
+	let hydratedFor = $state<string | null>(null);
+	$effect(() => {
+		const puzzle = data.editing;
+		const key = puzzle ? puzzle.id : '(new)';
+		if (hydratedFor === key) return;
+		hydratedFor = key;
+		if (puzzle) loadForEditing(puzzle);
+		else reset();
+	});
 
 	/** start → middles → end, with nulls where the author hasn't chosen yet. */
 	const nodes = $derived<(TitleSuggestion | null)[]>([start, ...middle, end]);
@@ -120,6 +167,23 @@
 
 	const ready = $derived(problems.length === 0 && links.every(Boolean));
 
+	/**
+	 * Connections whose saved actor is no longer among the shared cast — TMDB
+	 * credits do get edited. Without this the dropdown would quietly fall back
+	 * to the top-billed name and the next save would rewrite the puzzle.
+	 */
+	const lostLinks = $derived.by(() => {
+		const out: number[] = [];
+		pairs.forEach((pair, i) => {
+			if (!pair.key) return;
+			const wanted = chosen[pair.key];
+			const list = candidates[pair.key];
+			if (wanted === undefined || !list) return;
+			if (!list.some((person) => person.id === wanted)) out.push(i);
+		});
+		return out;
+	});
+
 	function puzzleJson() {
 		return {
 			id: slug,
@@ -153,6 +217,14 @@
 			const body = await res.json();
 			if (!res.ok) throw new Error(body.error ?? 'Save failed.');
 			saved = body.saved;
+			updated = Boolean(body.updated);
+			// An edit keeps its id, so stay on it rather than dropping back to a
+			// blank form — the usual next move is another tweak. Put the id in the
+			// URL too, so a reload comes back to the same puzzle.
+			editingId = body.saved;
+			if (page.url.searchParams.get('edit') !== body.saved) {
+				replaceState(`/build?edit=${encodeURIComponent(body.saved)}`, {});
+			}
 			await invalidateAll();
 		} catch (e) {
 			saveError = (e as Error).message;
@@ -193,6 +265,7 @@
 	}
 
 	function reset() {
+		editingId = null;
 		name = '';
 		start = null;
 		end = null;
@@ -213,7 +286,44 @@
 			Pick the two ends and the films between them. Every adjacent pair is checked against TMDB, and
 			the shared actor becomes the connection the player uncovers.
 		</p>
+		<p class="mt-2 text-sm">
+			<a
+				href="/build/walk"
+				class="text-amber-300 underline decoration-dotted underline-offset-4 transition hover:text-amber-200"
+			>
+				Or walk the cast instead →
+			</a>
+			<span class="text-slate-500">
+				— start from one film and follow actors outwards, rather than knowing the chain up front.
+			</span>
+		</p>
 	</header>
+
+	{#if data.missing}
+		<p class="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+			No puzzle called <code>{data.missing}</code> to edit — starting a new one instead.
+		</p>
+	{/if}
+
+	{#if data.editing || editingId}
+		<div
+			class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3"
+		>
+			<p class="text-sm text-sky-100">
+				Editing <span class="font-semibold">{name || data.editing?.name || editingId}</span>
+				<span class="block text-xs text-sky-200/70">
+					Saving overwrites it. The id stays <code>{editingId ?? data.editing?.id}</code> even if
+					you rename it, so a link to the puzzle keeps working.
+				</span>
+			</p>
+			<a
+				href="/build"
+				class="shrink-0 rounded-lg border border-sky-400/30 px-3 py-1.5 text-sm text-sky-100 transition hover:border-sky-400/60"
+			>
+				Start a new puzzle
+			</a>
+		</div>
+	{/if}
 
 	<!-- What the cache is doing for us. The whole point of the database is that
 	     these numbers grow while the call count doesn't. -->
@@ -307,7 +417,12 @@
 							{/each}
 						</select>
 					</div>
-					{#if list.length > 1}
+					{#if lostLinks.includes(i)}
+						<p class="text-[0.7rem] text-amber-300">
+							The actor this was saved with is no longer in the shared cast — now set to
+							{picked?.name}. Saving will keep that.
+						</p>
+					{:else if list.length > 1}
 						<p class="text-[0.7rem] text-slate-600">
 							{list.length} people are in both; the player only needs to name one.
 						</p>
@@ -384,7 +499,7 @@
 				disabled={!ready || saving}
 				class="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
 			>
-				{saving ? 'Saving…' : 'Save to library'}
+				{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save to library'}
 			</button>
 			<button
 				type="button"
@@ -410,8 +525,8 @@
 		{/if}
 		{#if saved}
 			<p class="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
-				Saved as <code>{saved}</code> ·
-				<a href="/?puzzle={saved}" class="underline">play it</a>
+				{updated ? 'Updated' : 'Saved as'} <code>{saved}</code> ·
+				<a href="/?puzzle={saved}" data-sveltekit-reload class="underline">play it</a>
 			</p>
 		{/if}
 	</section>
@@ -449,6 +564,11 @@
 						href="/?puzzle={puzzle.id}"
 						class="shrink-0 rounded-md border border-slate-700 px-2.5 py-1 text-xs text-slate-300 transition hover:border-slate-500"
 					>Play</a>
+					<a
+						href="/build?edit={puzzle.id}"
+						class="shrink-0 rounded-md border border-slate-700 px-2.5 py-1 text-xs text-sky-300 transition hover:border-sky-500/50"
+						aria-current={editingId === puzzle.id ? 'page' : undefined}
+					>{editingId === puzzle.id ? 'Editing' : 'Edit'}</a>
 					<button
 						type="button"
 						onclick={() => remove(puzzle.id)}

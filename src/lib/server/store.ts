@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { dev } from '$app/environment';
+import { env } from '$env/dynamic/private';
 import { db, now } from './db';
 import seed from './library.json' with { type: 'json' };
 import {
@@ -22,10 +23,28 @@ export interface CastEntry extends CreditIn {
 	popularity: number;
 }
 
-/** How well known a title is. Both come free with a search response. */
+/** How well known a title is. All three come free with a search response. */
 export interface FameSignals {
 	popularity: number;
 	voteCount: number;
+	/** TMDB's score out of 10. For display; `voteCount` is the fame signal. */
+	voteAverage: number;
+}
+
+/** One person in a title's cast, as the walk builder shows them. */
+export interface CastMember {
+	personId: number;
+	name: string;
+	profilePath: string | null;
+	character: string;
+	billing: number | null;
+	popularity: number;
+}
+
+/** One title in a person's filmography, with how they were credited in it. */
+export interface FilmographyEntry extends TitleSummary, FameSignals {
+	character: string;
+	billing: number | null;
 }
 
 /** A search result plus the signals the ranking needs. */
@@ -40,8 +59,8 @@ const sql = {
 	// title in a search result must not forget that we have its cast.
 	upsertTitle: db.prepare(`
 		insert into titles
-			(media_type, tmdb_id, title, year, poster_path, fetched_at, popularity, vote_count)
-		values (@mediaType, @id, @title, @year, @posterPath, @at, @popularity, @voteCount)
+			(media_type, tmdb_id, title, year, poster_path, fetched_at, popularity, vote_count, vote_average)
+		values (@mediaType, @id, @title, @year, @posterPath, @at, @popularity, @voteCount, @voteAverage)
 		on conflict (media_type, tmdb_id) do update set
 			title = excluded.title,
 			year = excluded.year,
@@ -50,7 +69,8 @@ const sql = {
 			-- Saving a puzzle writes titles with no fame signals attached; don't
 			-- let that wipe what a search told us.
 			popularity = case when excluded.popularity > 0 then excluded.popularity else titles.popularity end,
-			vote_count = case when excluded.vote_count > 0 then excluded.vote_count else titles.vote_count end
+			vote_count = case when excluded.vote_count > 0 then excluded.vote_count else titles.vote_count end,
+			vote_average = case when excluded.vote_average > 0 then excluded.vote_average else titles.vote_average end
 	`),
 	getTitle: db.prepare(`
 		select tmdb_id as id, media_type as mediaType, title, year, poster_path as posterPath
@@ -59,7 +79,7 @@ const sql = {
 	/** As above, plus the signals the search ranking needs. */
 	getCandidate: db.prepare(`
 		select tmdb_id as id, media_type as mediaType, title, year, poster_path as posterPath,
-		       popularity, vote_count as voteCount
+		       popularity, vote_count as voteCount, vote_average as voteAverage
 		from titles where media_type = ? and tmdb_id = ?
 	`),
 	castAge: db.prepare(`select cast_fetched_at as at from titles where media_type = ? and tmdb_id = ?`),
@@ -74,6 +94,45 @@ const sql = {
 			popularity = case when excluded.popularity > 0 then excluded.popularity else people.popularity end
 	`),
 	clearCast: db.prepare(`delete from title_cast where media_type = ? and tmdb_id = ?`),
+	/**
+	 * Add one credit without disturbing the rest of the title's cast. Used when
+	 * the row is discovered from the person's end, where all we learn is that
+	 * this one person was in this one film.
+	 */
+	upsertCastRow: db.prepare(`
+		insert into title_cast (media_type, tmdb_id, person_id, character, billing, episodes)
+		values (@mediaType, @id, @personId, @character, @billing, @episodes)
+		on conflict (media_type, tmdb_id, person_id) do update set
+			character = case when excluded.character <> '' then excluded.character else title_cast.character end,
+			billing = coalesce(excluded.billing, title_cast.billing)
+	`),
+	personCreditsAge: db.prepare(`select credits_fetched_at as at from people where tmdb_id = ?`),
+	markPersonCredits: db.prepare(`update people set credits_fetched_at = ? where tmdb_id = ?`),
+	getPerson: db.prepare(`
+		select tmdb_id as personId, name, profile_path as profilePath, popularity from people where tmdb_id = ?
+	`),
+
+	/** A title's cast, in billing order, with the unknowns filtered out. */
+	castOf: db.prepare(`
+		select p.tmdb_id as personId, p.name, p.profile_path as profilePath,
+		       tc.character, tc.billing, p.popularity
+		from title_cast tc join people p on p.tmdb_id = tc.person_id
+		where tc.media_type = @mediaType and tc.tmdb_id = @id and p.popularity >= @minPopularity
+		order by coalesce(tc.billing, 999), p.popularity desc, p.name
+		limit @limit
+	`),
+
+	/** A person's filmography, best known first. */
+	filmographyOf: db.prepare(`
+		select ti.tmdb_id as id, ti.media_type as mediaType, ti.title, ti.year,
+		       ti.poster_path as posterPath, ti.popularity, ti.vote_count as voteCount,
+		       ti.vote_average as voteAverage, tc.character, tc.billing
+		from title_cast tc
+		join titles ti on ti.media_type = tc.media_type and ti.tmdb_id = tc.tmdb_id
+		where tc.person_id = @personId and ti.vote_count >= @minVotes
+		order by ti.vote_count desc, ti.title
+		limit @limit
+	`),
 	insertCast: db.prepare(`
 		insert into title_cast (media_type, tmdb_id, person_id, character, billing, episodes)
 		values (@mediaType, @id, @personId, @character, @billing, @episodes)
@@ -179,7 +238,8 @@ export function putTitle(title: TitleSummary, fame?: FameSignals) {
 		...title,
 		at: now(),
 		popularity: fame?.popularity ?? 0,
-		voteCount: fame?.voteCount ?? 0
+		voteCount: fame?.voteCount ?? 0,
+		voteAverage: fame?.voteAverage ?? 0
 	});
 }
 
@@ -259,6 +319,70 @@ export function sharedCast(
 	}));
 }
 
+/** When we last pulled this person's filmography, or null if we never have. */
+export function personCreditsFetchedAt(personId: number): number | null {
+	return (sql.personCreditsAge.get(personId) as { at: number | null } | undefined)?.at ?? null;
+}
+
+export function getPerson(personId: number) {
+	return (
+		(sql.getPerson.get(personId) as
+			| { personId: number; name: string; profilePath: string | null; popularity: number }
+			| undefined) ?? null
+	);
+}
+
+/**
+ * Store a person's filmography.
+ *
+ * Each credit is one row in `title_cast` — the same table a film's own cast
+ * lands in, because it's the same relation seen from the other end. Rows are
+ * upserted rather than replaced, so learning "Cage was in Con Air" from his
+ * filmography can't disturb the other 60 people we know about Con Air.
+ */
+export const putPersonCredits = db.transaction(
+	(
+		person: { personId: number; name: string; profilePath: string | null; popularity: number },
+		credits: Array<{
+			title: TitleSummary;
+			fame: FameSignals;
+			character: string;
+			billing: number | null;
+		}>
+	) => {
+		sql.upsertPerson.run(person);
+		for (const credit of credits) {
+			putTitle(credit.title, credit.fame);
+			sql.upsertCastRow.run({
+				mediaType: credit.title.mediaType,
+				id: credit.title.id,
+				personId: person.personId,
+				character: credit.character,
+				billing: credit.billing,
+				episodes: null
+			});
+		}
+		sql.markPersonCredits.run(now(), person.personId);
+	}
+);
+
+/** A title's cast in billing order, with anyone below `minPopularity` dropped. */
+export function castOf(
+	mediaType: MediaType,
+	id: number,
+	{ minPopularity = 0, limit = 40 } = {}
+): CastMember[] {
+	return sql.castOf.all({ mediaType, id, minPopularity, limit }) as CastMember[];
+}
+
+/** A person's films, best known first, with anything below `minVotes` dropped. */
+export function filmographyOf(
+	personId: number,
+	{ minVotes = 0, limit = 40 } = {}
+): FilmographyEntry[] {
+	return sql.filmographyOf.all({ personId, minVotes, limit }) as FilmographyEntry[];
+}
+
 /* -------------------------------------------------------------------------- */
 /* Searches                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -289,7 +413,11 @@ export function getSearch(query: string, ttlMs: number): SearchCandidate[] | nul
 /** Store a search's results in TMDB's own order, with their fame signals. */
 export const putSearch = db.transaction((query: string, candidates: SearchCandidate[]) => {
 	for (const candidate of candidates) {
-		putTitle(candidate, { popularity: candidate.popularity, voteCount: candidate.voteCount });
+		putTitle(candidate, {
+			popularity: candidate.popularity,
+			voteCount: candidate.voteCount,
+			voteAverage: candidate.voteAverage
+		});
 	}
 	sql.putSearch.run(query, JSON.stringify(candidates.map(titleRef)), now());
 });
@@ -448,18 +576,43 @@ export function deletePuzzle(id: string): boolean {
 const SEED_PATH = 'src/lib/server/library.json';
 
 /**
- * `library.json` is the seed shipped with the code: it's imported, so it's in
- * the bundle, and a fresh deployment comes up with puzzles in it. Once the
- * database has any puzzle of its own we leave it alone.
+ * How `library.json` relates to the database on boot.
+ *
+ *  - `empty` (default) — seed only a database with no puzzles in it. Safe, and
+ *    what you want when puzzles are authored on the instance itself.
+ *  - `merge` — upsert every puzzle in the seed on every boot, making
+ *    `library.json` the source of truth. This is what makes "author locally,
+ *    commit, deploy" actually deliver new and edited puzzles to a running
+ *    instance; without it a redeploy changes nothing, because the database
+ *    already has puzzles and `empty` therefore skips.
+ *  - `off` — never seed.
+ *
+ * Pick one source of truth. Under `merge`, a puzzle deleted on the instance
+ * comes back on the next boot, and an edit made on the instance to a puzzle
+ * that also exists in the seed is overwritten by the seed's version.
  */
-function seedIfEmpty() {
-	if (one(sql.count.puzzles) > 0) return;
+const SEED_MODE = (env.PUZZLE_SEED ?? 'empty').trim().toLowerCase();
+
+function applySeed() {
 	// Cast through `unknown`: the JSON's inferred shape can't narrow `roles` to a
 	// two-element tuple, however well formed the file is.
-	for (const puzzle of seed as unknown as Puzzle[]) savePuzzle(puzzle);
+	const puzzles = seed as unknown as Puzzle[];
+	if (SEED_MODE === 'off' || !puzzles.length) return;
+
+	if (SEED_MODE === 'merge') {
+		for (const puzzle of puzzles) savePuzzle(puzzle);
+		// Logged rather than silent: this writes to the library on every boot, so
+		// it should be visible in `pm2 logs` when it happens.
+		console.log(`[actor-connect] seed: merged ${puzzles.length} puzzle(s) from library.json`);
+		return;
+	}
+
+	if (one(sql.count.puzzles) > 0) return;
+	for (const puzzle of puzzles) savePuzzle(puzzle);
+	console.log(`[actor-connect] seed: empty library, added ${puzzles.length} puzzle(s)`);
 }
 
-seedIfEmpty();
+applySeed();
 
 /**
  * Write the database's puzzles back out to the seed file, so puzzles authored

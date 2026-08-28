@@ -4,6 +4,7 @@ import {
 	canExportSeed,
 	deletePuzzle,
 	exportSeed,
+	getPuzzle,
 	listPuzzles,
 	parsePuzzle,
 	puzzleName,
@@ -28,8 +29,18 @@ export const GET: RequestHandler = async () =>
 export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const puzzle = parsePuzzle(await request.json());
+
+		// Saving over an existing id is an edit, not a new puzzle: keep when it
+		// was first created and how it was made, so editing doesn't shuffle the
+		// library order or relabel an auto-generated puzzle as hand-made.
+		const existing = getPuzzle(puzzle.id);
+		if (existing) {
+			puzzle.createdAt = existing.createdAt ?? puzzle.createdAt;
+			puzzle.source = existing.source ?? puzzle.source;
+		}
+
 		savePuzzle(puzzle);
-		return json({ saved: puzzle.id });
+		return json({ saved: puzzle.id, updated: Boolean(existing) });
 	} catch (err) {
 		return json({ error: (err as Error).message }, { status: 400 });
 	}

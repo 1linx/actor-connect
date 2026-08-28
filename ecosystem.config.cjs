@@ -58,7 +58,19 @@ module.exports = {
 				// somewhere unexpected if the process is ever started from a
 				// different working directory. Gitignored, and the one thing here
 				// worth backing up.
-				DATABASE_PATH: path.join(appDir, 'data', 'actor-connect.db')
+				DATABASE_PATH: path.join(appDir, 'data', 'actor-connect.db'),
+
+				// `library.json` is the source of truth for puzzles: on every boot,
+				// every puzzle in it is written to the database. That is what makes
+				// `git pull && npm run build && pm2 reload` actually deliver new and
+				// edited puzzles — without it a redeploy changes nothing, because the
+				// database already has puzzles.
+				//
+				// The trade: a puzzle deleted on the instance comes back on the next
+				// reload, and an edit made *on the instance* to a puzzle that is also
+				// in the seed gets overwritten. If you'd rather author on the
+				// instance, set this to 'empty' and treat the database as canonical.
+				PUZZLE_SEED: 'merge',
 
 				// The puzzle builder and the endpoints that spend the TMDB key are
 				// closed in production. Uncomment to open them — and put auth in

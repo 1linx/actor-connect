@@ -7,7 +7,14 @@ import { canEdit } from '$lib/server/library';
  * closed in production unless PUZZLE_EDITOR=1 — otherwise anyone who found the
  * URL could run up API calls on our key, or edit the puzzle set.
  */
-const EDITOR_ONLY = ['/build', '/api/search', '/api/links', '/api/puzzles'];
+const EDITOR_ONLY = [
+	'/build',
+	'/api/search',
+	'/api/links',
+	'/api/puzzles',
+	'/api/cast',
+	'/api/filmography'
+];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const path = event.url.pathname;

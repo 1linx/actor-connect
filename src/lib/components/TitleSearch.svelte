@@ -142,6 +142,23 @@
 		if (!container.contains(event.relatedTarget as Node | null)) open = false;
 	}
 
+	/**
+	 * Reflect a selection made from outside into the visible input.
+	 *
+	 * The component owns `query` — the text in the box — while `selected` is
+	 * bindable, so loading a puzzle into the builder sets the selection without
+	 * the box knowing about it, and the field looks empty when it isn't. Keyed on
+	 * the ref so re-selecting the same title doesn't fight the user's typing.
+	 */
+	let displayed = $state<string | null>(null);
+	$effect(() => {
+		const current = selected;
+		const ref = current ? `${current.mediaType}:${current.id}` : null;
+		if (ref === displayed) return;
+		displayed = ref;
+		if (current) query = current.year ? `${current.title} (${current.year})` : current.title;
+	});
+
 	const ratings = (votes: number) => {
 		if (votes === 0) return 'unrated';
 		if (votes < 1000) return `${votes} ratings`;
