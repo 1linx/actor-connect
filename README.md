@@ -434,3 +434,8 @@ the environment isn't re-read. Short version: the app listens on
 `127.0.0.1:9091`, Caddy terminates TLS in front of it, secrets stay in a
 gitignored `.env` that Node reads via `--env-file`, and the SQLite database
 under `data/` is the only thing worth backing up.
+
+Run the following:
+```
+git pull && npm run build && pm2 reload ecosystem.config.cjs --update-env
+```
