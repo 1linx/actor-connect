@@ -72,6 +72,23 @@ const sql = {
 			vote_count = case when excluded.vote_count > 0 then excluded.vote_count else titles.vote_count end,
 			vote_average = case when excluded.vote_average > 0 then excluded.vote_average else titles.vote_average end
 	`),
+	/**
+	 * For callers that hold a *reference* to a title rather than a fresh answer
+	 * from TMDB — saving a puzzle, or merging one in from library.json. Fills in
+	 * anything missing, but never overwrites a known poster or year with a blank
+	 * one: a puzzle's stored copy of a title is not authoritative, and letting it
+	 * write nulls means one hand-written or stale payload can strip the posters
+	 * out of the shared cache.
+	 */
+	upsertTitleRef: db.prepare(`
+		insert into titles
+			(media_type, tmdb_id, title, year, poster_path, fetched_at, popularity, vote_count, vote_average)
+		values (@mediaType, @id, @title, @year, @posterPath, @at, 0, 0, 0)
+		on conflict (media_type, tmdb_id) do update set
+			title = excluded.title,
+			year = coalesce(excluded.year, titles.year),
+			poster_path = coalesce(excluded.poster_path, titles.poster_path)
+	`),
 	getTitle: db.prepare(`
 		select tmdb_id as id, media_type as mediaType, title, year, poster_path as posterPath
 		from titles where media_type = ? and tmdb_id = ?
@@ -243,8 +260,16 @@ export function putTitle(title: TitleSummary, fame?: FameSignals) {
 	});
 }
 
+/**
+ * Record a title we only hold a reference to. See `upsertTitleRef`: this cannot
+ * blank out a poster path or year that TMDB has already given us.
+ */
+export function putTitleRef(title: TitleSummary) {
+	sql.upsertTitleRef.run({ ...title, at: now() });
+}
+
 export const putTitles = db.transaction((titles: TitleSummary[]) => {
-	for (const title of titles) putTitle(title);
+	for (const title of titles) putTitleRef(title);
 });
 
 export function getTitle(mediaType: MediaType, id: number): TitleSummary | null {

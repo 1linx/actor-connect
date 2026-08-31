@@ -7,14 +7,14 @@
 			"mediaType": "movie",
 			"title": "Con Air",
 			"year": "1997",
-			"posterPath": null
+			"posterPath": "/kOKjgrEzGOP92rVQ6srA9jtp60l.jpg"
 		},
 		"end": {
 			"id": 9804,
 			"mediaType": "movie",
 			"title": "Waterworld",
 			"year": "1995",
-			"posterPath": null
+			"posterPath": "/X4UyUO5jgzs3c5YafnmYKLKKYw.jpg"
 		},
 		"chain": [
 			{
@@ -22,28 +22,28 @@
 				"mediaType": "movie",
 				"title": "The Rock",
 				"year": "1996",
-				"posterPath": null
+				"posterPath": "/eBcoxveWzzXQrCrwWMGAROcqgpP.jpg"
 			},
 			{
 				"id": 1669,
 				"mediaType": "movie",
 				"title": "The Hunt for Red October",
 				"year": "1990",
-				"posterPath": null
+				"posterPath": "/yVl7zidse4KiWtGMqHFtZCx4X3N.jpg"
 			},
 			{
 				"id": 329,
 				"mediaType": "movie",
 				"title": "Jurassic Park",
 				"year": "1993",
-				"posterPath": null
+				"posterPath": "/63viWuPfYQjRYLSZSZNq7dglJP5.jpg"
 			},
 			{
 				"id": 793,
 				"mediaType": "movie",
 				"title": "Blue Velvet",
 				"year": "1986",
-				"posterPath": null
+				"posterPath": "/6v1zYh2FKOYVddY5pCQhd4PO9uX.jpg"
 			}
 		],
 		"links": [
@@ -86,7 +86,7 @@
 			{
 				"personId": 2778,
 				"name": "Dennis Hopper",
-				"profilePath": "/hfrzsJhkX7Vphe3pVYk8lA9BNfg.jpg",
+				"profilePath": "/kqyNvLHi5RZGZcZMxl7e6XvoB5U.jpg",
 				"roles": [
 					"Frank Booth",
 					"Deacon"
